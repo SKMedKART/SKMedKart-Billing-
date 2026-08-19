@@ -11,7 +11,7 @@ import java.util.ArrayList;
 public class DB extends SQLiteOpenHelper {
 
     private static final String DB_NAME = "skmedkart.db";
-    private static final int DB_VERSION = 2;
+    private static final int DB_VERSION = 3;
 
     public DB(Context context) {
         super(context, DB_NAME, null, DB_VERSION);
@@ -55,89 +55,125 @@ public class DB extends SQLiteOpenHelper {
         }
     }
 
+    // =========================
+    // DATABASE CREATE
+    // =========================
     @Override
     public void onCreate(SQLiteDatabase db) {
 
-        // MEDICINES
         db.execSQL(
-                "CREATE TABLE medicines (" +
+                "CREATE TABLE IF NOT EXISTS medicines (" +
                         "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                         "name TEXT NOT NULL," +
                         "price REAL NOT NULL," +
                         "stock INTEGER NOT NULL DEFAULT 0," +
-                        "expiry TEXT)"
+                        "expiry TEXT" +
+                        ")"
         );
 
-        // CUSTOMERS
         db.execSQL(
-                "CREATE TABLE customers (" +
+                "CREATE TABLE IF NOT EXISTS customers (" +
                         "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                         "name TEXT NOT NULL," +
                         "phone TEXT," +
-                        "notes TEXT)"
+                        "notes TEXT" +
+                        ")"
         );
 
-        // BILLS
         db.execSQL(
-                "CREATE TABLE bills (" +
+                "CREATE TABLE IF NOT EXISTS bills (" +
                         "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                         "customer TEXT," +
                         "phone TEXT," +
                         "total REAL NOT NULL," +
-                        "date TEXT)"
+                        "date TEXT" +
+                        ")"
         );
 
-        // BILL ITEMS
         db.execSQL(
-                "CREATE TABLE bill_items (" +
+                "CREATE TABLE IF NOT EXISTS bill_items (" +
                         "id INTEGER PRIMARY KEY AUTOINCREMENT," +
                         "bill_id INTEGER NOT NULL," +
-                        "medicine_id INTEGER," +
-                        "medicine_name TEXT," +
-                        "price REAL," +
-                        "qty INTEGER)"
+                        "medicine_id INTEGER NOT NULL," +
+                        "name TEXT NOT NULL," +
+                        "price REAL NOT NULL," +
+                        "qty INTEGER NOT NULL" +
+                        ")"
         );
     }
 
+    // =========================
+    // DATABASE UPGRADE
+    // =========================
     @Override
-    public void onUpgrade(SQLiteDatabase db,
-                          int oldVersion,
-                          int newVersion) {
+    public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
 
-        // Keep existing data.
-        if (oldVersion < 2) {
-            db.execSQL(
-                    "CREATE TABLE IF NOT EXISTS bill_items (" +
-                            "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                            "bill_id INTEGER NOT NULL," +
-                            "medicine_id INTEGER," +
-                            "medicine_name TEXT," +
-                            "price REAL," +
-                            "qty INTEGER)"
-            );
-        }
+        // Make sure all required tables exist.
+        // Existing data is NOT deleted.
+
+        db.execSQL(
+                "CREATE TABLE IF NOT EXISTS medicines (" +
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                        "name TEXT NOT NULL," +
+                        "price REAL NOT NULL," +
+                        "stock INTEGER NOT NULL DEFAULT 0," +
+                        "expiry TEXT" +
+                        ")"
+        );
+
+        db.execSQL(
+                "CREATE TABLE IF NOT EXISTS customers (" +
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                        "name TEXT NOT NULL," +
+                        "phone TEXT," +
+                        "notes TEXT" +
+                        ")"
+        );
+
+        db.execSQL(
+                "CREATE TABLE IF NOT EXISTS bills (" +
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                        "customer TEXT," +
+                        "phone TEXT," +
+                        "total REAL NOT NULL," +
+                        "date TEXT" +
+                        ")"
+        );
+
+        db.execSQL(
+                "CREATE TABLE IF NOT EXISTS bill_items (" +
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                        "bill_id INTEGER NOT NULL," +
+                        "medicine_id INTEGER NOT NULL," +
+                        "name TEXT NOT NULL," +
+                        "price REAL NOT NULL," +
+                        "qty INTEGER NOT NULL" +
+                        ")"
+        );
     }
 
-    // =====================================================
-    // MEDICINE
-    // =====================================================
-
-    public void addMedicine(String name,
+    // =========================
+    // ADD MEDICINE
+    // =========================
+    public long addMedicine(String name,
                             double price,
                             int stock,
                             String expiry) {
 
         SQLiteDatabase db = getWritableDatabase();
 
-        ContentValues v = new ContentValues();
-        v.put("name", name);
-        v.put("price", price);
-        v.put("stock", stock);
-        v.put("expiry", expiry);
+        ContentValues values = new ContentValues();
+        values.put("name", name.trim());
+        values.put("price", price);
+        values.put("stock", stock);
+        values.put("expiry", expiry.trim());
 
-        db.insert("medicines", null, v);
+        return db.insert("medicines", null, values);
     }
 
+    // =========================
+    // MEDICINE LIST
+    // =========================
     public ArrayList<Medicine> medicineList() {
 
         ArrayList<Medicine> list = new ArrayList<>();
@@ -145,46 +181,6 @@ public class DB extends SQLiteOpenHelper {
         SQLiteDatabase db = getReadableDatabase();
 
         Cursor c = db.query(
-                "medicines",
-                null,
-                null,
-                null,
-                null,
-                null,
-                "name COLLATE NOCASE ASC"
-        );
-
-        while (c.moveToNext()) {
-
-            long id = c.getLong(c.getColumnIndexOrThrow("id"));
-            String name = c.getString(
-                    c.getColumnIndexOrThrow("name"));
-            double price = c.getDouble(
-                    c.getColumnIndexOrThrow("price"));
-            int stock = c.getInt(
-                    c.getColumnIndexOrThrow("stock"));
-            String expiry = c.getString(
-                    c.getColumnIndexOrThrow("expiry"));
-
-            list.add(new Medicine(
-                    id,
-                    name,
-                    price,
-                    stock,
-                    expiry
-            ));
-        }
-
-        c.close();
-
-        return list;
-    }
-
-    public Cursor medicines() {
-
-        SQLiteDatabase db = getReadableDatabase();
-
-        return db.query(
                 "medicines",
                 new String[]{
                         "id",
@@ -199,70 +195,102 @@ public class DB extends SQLiteOpenHelper {
                 null,
                 "name COLLATE NOCASE ASC"
         );
+
+        try {
+            while (c.moveToNext()) {
+
+                long id = c.getLong(0);
+                String name = c.getString(1);
+                double price = c.getDouble(2);
+                int stock = c.getInt(3);
+                String expiry = c.getString(4);
+
+                list.add(
+                        new Medicine(
+                                id,
+                                name,
+                                price,
+                                stock,
+                                expiry == null ? "" : expiry
+                        )
+                );
+            }
+        } finally {
+            c.close();
+        }
+
+        return list;
     }
 
-    // =====================================================
-    // STOCK REDUCTION
-    // =====================================================
+    // =========================
+    // MEDICINES CURSOR
+    // MainActivity uses:
+    // 1=name
+    // 2=price
+    // 3=stock
+    // 4=expiry
+    // =========================
+    public Cursor medicines() {
 
-    private boolean reduceStock(SQLiteDatabase db,
-                                long medicineId,
-                                int qty) {
+        SQLiteDatabase db = getReadableDatabase();
 
-        Cursor c = db.query(
-                "medicines",
-                new String[]{"stock"},
-                "id=?",
-                new String[]{String.valueOf(medicineId)},
-                null,
-                null,
+        return db.rawQuery(
+                "SELECT id, name, price, stock, expiry " +
+                        "FROM medicines " +
+                        "ORDER BY name COLLATE NOCASE ASC",
                 null
         );
-
-        if (!c.moveToFirst()) {
-            c.close();
-            return false;
-        }
-
-        int currentStock = c.getInt(0);
-        c.close();
-
-        if (qty <= 0) {
-            return false;
-        }
-
-        if (currentStock < qty) {
-            return false;
-        }
-
-        int newStock = currentStock - qty;
-
-        ContentValues v = new ContentValues();
-        v.put("stock", newStock);
-
-        int updated = db.update(
-                "medicines",
-                v,
-                "id=? AND stock>=?",
-                new String[]{
-                        String.valueOf(medicineId),
-                        String.valueOf(qty)
-                }
-        );
-
-        return updated == 1;
     }
 
-    // =====================================================
-    // BILL + STOCK UPDATE
-    // =====================================================
+    // =========================
+    // ADD CUSTOMER
+    // =========================
+    public long addCustomer(String name,
+                            String phone,
+                            String notes) {
 
-    public void addBillWithItems(
-            String customer,
-            String phone,
-            double total,
-            String date,
-            ArrayList<BillItem> items) {
+        SQLiteDatabase db = getWritableDatabase();
+
+        ContentValues values = new ContentValues();
+        values.put("name", name.trim());
+        values.put("phone", phone == null ? "" : phone.trim());
+        values.put("notes", notes == null ? "" : notes.trim());
+
+        return db.insert("customers", null, values);
+    }
+
+    // =========================
+    // CUSTOMERS CURSOR
+    // MainActivity uses:
+    // 1=name
+    // 2=phone
+    // 3=notes
+    // =========================
+    public Cursor customers() {
+
+        SQLiteDatabase db = getReadableDatabase();
+
+        return db.rawQuery(
+                "SELECT id, name, phone, notes " +
+                        "FROM customers " +
+                        "ORDER BY name COLLATE NOCASE ASC",
+                null
+        );
+    }
+
+    // =========================
+    // SAVE BILL + BILL ITEMS
+    // + AUTOMATIC STOCK REDUCTION
+    // =========================
+    public void addBillWithItems(String customer,
+                                 String phone,
+                                 double total,
+                                 String date,
+                                 ArrayList<BillItem> items) {
+
+        if (items == null || items.isEmpty()) {
+            throw new IllegalStateException("No medicines in bill");
+        }
 
         SQLiteDatabase db = getWritableDatabase();
 
@@ -270,57 +298,63 @@ public class DB extends SQLiteOpenHelper {
 
         try {
 
-            // ---------------------------------------------
-            // FIRST CHECK ALL STOCK
-            // ---------------------------------------------
-
+            // ---------------------------------
+            // 1. CHECK STOCK BEFORE SAVING
+            // ---------------------------------
             for (BillItem item : items) {
 
-                Cursor c = db.query(
-                        "medicines",
-                        new String[]{"stock"},
-                        "id=?",
+                Cursor c = db.rawQuery(
+                        "SELECT stock FROM medicines WHERE id = ?",
                         new String[]{
                                 String.valueOf(item.medicineId)
-                        },
-                        null,
-                        null,
-                        null
+                        }
                 );
 
-                if (!c.moveToFirst()) {
+                try {
+
+                    if (!c.moveToFirst()) {
+                        throw new IllegalStateException(
+                                "Medicine not found: " + item.name
+                        );
+                    }
+
+                    int currentStock = c.getInt(0);
+
+                    if (item.qty <= 0) {
+                        throw new IllegalStateException(
+                                "Invalid quantity for " + item.name
+                        );
+                    }
+
+                    if (currentStock < item.qty) {
+                        throw new IllegalStateException(
+                                "Not enough stock for " +
+                                        item.name +
+                                        ". Available: " +
+                                        currentStock
+                        );
+                    }
+
+                } finally {
                     c.close();
-                    throw new IllegalStateException(
-                            "Medicine not found: " + item.name
-                    );
-                }
-
-                int stock = c.getInt(0);
-                c.close();
-
-                if (item.qty <= 0) {
-                    throw new IllegalStateException(
-                            "Invalid quantity for " + item.name
-                    );
-                }
-
-                if (item.qty > stock) {
-                    throw new IllegalStateException(
-                            "Only " + stock +
-                                    " in stock for " +
-                                    item.name
-                    );
                 }
             }
 
-            // ---------------------------------------------
-            // CREATE BILL
-            // ---------------------------------------------
-
+            // ---------------------------------
+            // 2. INSERT BILL
+            // ---------------------------------
             ContentValues billValues = new ContentValues();
 
-            billValues.put("customer", customer);
-            billValues.put("phone", phone);
+            billValues.put(
+                    "customer",
+                    customer == null ? "Walk-in Customer" : customer
+            );
+
+            billValues.put(
+                    "phone",
+                    phone == null ? "" : phone
+            );
+
             billValues.put("total", total);
             billValues.put("date", date);
 
@@ -336,39 +370,19 @@ public class DB extends SQLiteOpenHelper {
                 );
             }
 
-            // ---------------------------------------------
-            // ADD BILL ITEMS + REDUCE STOCK
-            // ---------------------------------------------
-
+            // ---------------------------------
+            // 3. INSERT BILL ITEMS
+            // 4. REDUCE STOCK
+            // ---------------------------------
             for (BillItem item : items) {
 
-                ContentValues itemValues =
-                        new ContentValues();
+                ContentValues itemValues = new ContentValues();
 
-                itemValues.put(
-                        "bill_id",
-                        billId
-                );
-
-                itemValues.put(
-                        "medicine_id",
-                        item.medicineId
-                );
-
-                itemValues.put(
-                        "medicine_name",
-                        item.name
-                );
-
-                itemValues.put(
-                        "price",
-                        item.price
-                );
-
-                itemValues.put(
-                        "qty",
-                        item.qty
-                );
+                itemValues.put("bill_id", billId);
+                itemValues.put("medicine_id", item.medicineId);
+                itemValues.put("name", item.name);
+                itemValues.put("price", item.price);
+                itemValues.put("qty", item.qty);
 
                 long itemId = db.insert(
                         "bill_items",
@@ -383,21 +397,29 @@ public class DB extends SQLiteOpenHelper {
                 }
 
                 // IMPORTANT:
-                // Reduce stock here
-                boolean reduced = reduceStock(
-                        db,
-                        item.medicineId,
-                        item.qty
-                );
+                // Reduce medicine stock.
 
-                if (!reduced) {
-                    throw new IllegalStateException(
-                            "Stock update failed for " +
-                                    item.name
-                    );
-                }
+
+                // The above statement needs bound values,
+                // so use update() below instead.
+
+                // SQLiteDatabase.update with expression
+                // is not suitable for arithmetic directly,
+                // therefore execute raw SQL safely.
+                db.execSQL(
+                        "UPDATE medicines " +
+                                "SET stock = stock - ? " +
+                                "WHERE id = ?",
+                        new Object[]{
+                                item.qty,
+                                item.medicineId
+                        }
+                );
             }
 
+            // ---------------------------------
+            // 5. COMMIT EVERYTHING
+            // ---------------------------------
             db.setTransactionSuccessful();
 
         } finally {
@@ -405,72 +427,73 @@ public class DB extends SQLiteOpenHelper {
         }
     }
 
-    // =====================================================
-    // CUSTOMERS
-    // =====================================================
-
-    public void addCustomer(
-            String name,
-            String phone,
-            String notes) {
-
-        SQLiteDatabase db = getWritableDatabase();
-
-        ContentValues v = new ContentValues();
-
-        v.put("name", name);
-        v.put("phone", phone);
-        v.put("notes", notes);
-
-        db.insert(
-                "customers",
-                null,
-                v
-        );
-    }
-
-    public Cursor customers() {
-
-        SQLiteDatabase db = getReadableDatabase();
-
-        return db.query(
-                "customers",
-                new String[]{
-                        "id",
-                        "name",
-                        "phone",
-                        "notes"
-                },
-                null,
-                null,
-                null,
-                null,
-                "id DESC"
-        );
-    }
-
-    // =====================================================
+    // =========================
     // SALES HISTORY
-    // =====================================================
-
+    // MainActivity uses:
+    // 1=customer
+    // 3=total
+    // 4=date
+    // =========================
     public Cursor bills() {
 
         SQLiteDatabase db = getReadableDatabase();
 
-        return db.query(
-                "bills",
-                new String[]{
-                        "id",
-                        "customer",
-                        "phone",
-                        "total",
-                        "date"
-                },
-                null,
-                null,
-                null,
-                null,
-                "id DESC"
+        return db.rawQuery(
+                "SELECT id, customer, phone, total, date " +
+                        "FROM bills " +
+                        "ORDER BY id DESC",
+                null
         );
+    }
+
+    // =========================
+    // OPTIONAL: GET CURRENT STOCK
+    // =========================
+    public int getStock(long medicineId) {
+
+        SQLiteDatabase db = getReadableDatabase();
+
+        Cursor c = db.rawQuery(
+                "SELECT stock FROM medicines WHERE id = ?",
+                new String[]{
+                        String.valueOf(medicineId)
+                }
+        );
+
+        try {
+            if (c.moveToFirst()) {
+                return c.getInt(0);
+            }
+        } finally {
+            c.close();
+        }
+
+        return 0;
+    }
+
+    // =========================
+    // OPTIONAL: DELETE MEDICINE
+    // =========================
+    public boolean deleteMedicine(long medicineId) {
+
+        SQLiteDatabase db = getWritableDatabase();
+
+        int result = db.delete(
+                "medicines",
+                "id = ?",
+                new String[]{
+                        String.valueOf(medicineId)
+                }
+        );
+
+        return result > 0;
+    }
+
+    // =========================
+    // CLOSE DATABASE
+    // =========================
+    @Override
+    public synchronized void close() {
+        super.close();
     }
 }

@@ -1,0 +1,41 @@
+name: Build SKMedKART APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract Android Project
+        run: |
+          mkdir -p project
+          unzip -o SKMedKART_READY_ANDROID_PROJECT.zip -d project
+
+      - name: Find Gradle Project
+        run: |
+          echo "Searching for Gradle project..."
+          find project -name gradlew -type f
+
+      - name: Make gradlew executable
+        run: |
+          chmod +x $(find project -name gradlew -type f | head -1)
+
+      - name: Build APK
+        run: |
+          GRADLEW=$(find project -name gradlew -type f | head -1)
+          cd "$(dirname "$GRADLEW")"
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SKMedKART-APK
+          path: project/**/build/outputs/apk/**/*.apk

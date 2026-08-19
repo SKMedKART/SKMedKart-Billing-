@@ -168,7 +168,19 @@ public class MainActivity extends Activity {
                 return;
             }
 
-            cart.add(new CartItem(m.id, m.name, m.price, q));
+            boolean merged = false;
+
+for (CartItem item : cart) {
+    if (item.medicineId == m.id) {
+        item.qty += q;
+        merged = true;
+        break;
+    }
+}
+
+if (!merged) {
+    cart.add(new CartItem(m.id, m.name, m.price, q));
+}
             qty.setText("");
             renderCart(cartBox, totalText);
         });

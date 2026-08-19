@@ -1,10 +1,10 @@
 name: Build SKMedKART APK
 
 on:
-  workflow_dispatch:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   build:
@@ -14,6 +14,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - name: Extract Android Project
         run: |
           mkdir -p project
@@ -21,21 +27,32 @@ jobs:
 
       - name: Find Gradle Project
         run: |
-          echo "Searching for Gradle project..."
-          find project -name gradlew -type f
+          GRADLEW=$(find project -name gradlew -type f -print -quit)
+          if [ -z "$GRADLEW" ]; then
+            echo "ERROR: gradlew not found"
+            find project -maxdepth 5 -type f | head -100
+            exit 1
+          fi
+          echo "GRADLEW=$GRADLEW" >> $GITHUB_ENV
+          echo "Found: $GRADLEW"
 
       - name: Make gradlew executable
         run: |
-          chmod +x $(find project -name gradlew -type f | head -1)
+          chmod +x "$GRADLEW"
 
       - name: Build APK
         run: |
-          GRADLEW=$(find project -name gradlew -type f | head -1)
-          cd "$(dirname "$GRADLEW")"
-          ./gradlew assembleDebug
+          PROJECT_DIR=$(dirname "$GRADLEW")
+          cd "$PROJECT_DIR"
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Find APK
+        run: |
+          find project -type f -name "*.apk" -print
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: SKMedKART-APK
-          path: project/**/build/outputs/apk/**/*.apk
+          path: project/**/*.apk
+          if-no-files-found: error

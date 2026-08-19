@@ -20,31 +20,25 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
       - name: Extract Android Project
         run: |
           mkdir -p project
           unzip -o SKMedKART_READY_ANDROID_PROJECT.zip -d project
 
-      - name: Find Gradle Project
+      - name: Find Android Project
         run: |
-          GRADLEW=$(find project -name gradlew -type f -print -quit)
-          if [ -z "$GRADLEW" ]; then
-            echo "ERROR: gradlew not found"
-            find project -maxdepth 5 -type f | head -100
-            exit 1
-          fi
-          echo "GRADLEW=$GRADLEW" >> $GITHUB_ENV
-          echo "Found: $GRADLEW"
-
-      - name: Make gradlew executable
-        run: |
-          chmod +x "$GRADLEW"
+          echo "Android project files:"
+          find project -maxdepth 3 -type f | sort
 
       - name: Build APK
         run: |
-          PROJECT_DIR=$(dirname "$GRADLEW")
-          cd "$PROJECT_DIR"
-          ./gradlew assembleDebug --no-daemon
+          cd project
+          gradle assembleDebug --no-daemon
 
       - name: Find APK
         run: |
